@@ -15,7 +15,7 @@ questions and does the rest.
 ## CLI
 
 ```bash
-npm install protoreel          # in the folder next to your prototype
+npm install github:seq000/protoreel    # in the folder next to your prototype (not on npm yet)
 cp node_modules/protoreel/examples/walkthrough.config.example.mjs walkthrough.config.mjs
 npx protoreel inspect walkthrough.config.mjs   # lists the page's buttons/links/inputs with real selectors
 npx protoreel walkthrough.config.mjs           # records → out/walkthrough.{webm,mp4} + poster
