@@ -1,0 +1,10 @@
+{
+  "name": "proto-capture",
+  "version": "0.1.0",
+  "description": "Records a click-through walkthrough of a local HTML prototype as a deterministic 60fps video, optionally composited inside a device frame exported from Figma.",
+  "author": {
+    "name": "Dariusz Fraczyk"
+  },
+  "keywords": ["prototype", "video", "playwright", "figma", "portfolio", "case-study"],
+  "license": "MIT"
+}
