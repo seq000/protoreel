@@ -1,4 +1,4 @@
-# Contributing to proto-capture
+# Contributing to protoreel
 
 Thanks for looking at this. It's a small tool — most of the value is in
 `assets/record.template.mjs` and the four reference docs it implements, so most

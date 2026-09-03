@@ -1,4 +1,4 @@
-# proto-capture
+# protoreel
 
 Turns an HTML prototype into a click-through walkthrough video — the kind you put in
 a case study or send to a stakeholder — without screen-recording anything.

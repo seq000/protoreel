@@ -1,4 +1,4 @@
-/* proto-capture — frame-stepped prototype recorder.
+/* protoreel — frame-stepped prototype recorder.
  *
  * Nothing is captured in real time. The CSS animation clock is frozen over CDP
  * and `setTimeout` is replaced with a virtual queue; each frame advances both
