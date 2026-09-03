@@ -7,6 +7,8 @@ description: Records a click-through walkthrough of an HTML prototype as a video
 
 Drive a local HTML prototype with Playwright and render it frame by frame, then encode with ffmpeg. Nothing is captured in real time — both the CSS animation clock and `setTimeout` are frozen and advanced 1/60 s per screenshot, so no frame is dropped, no transition is caught mid-race, and a re-run is byte-identical.
 
+The engine is the `protoreel` npm package (this plugin's repo root). This skill is a thin wrapper: it runs the interview, writes a config file, and runs the CLI. Paths below like `docs/…` and `examples/…` are relative to the plugin root — two levels up from this file.
+
 **Requires a Mac shell** (Desktop Commander `start_process` or an equivalent local shell) — the sandboxed Linux shell cannot do this, it has no browser and cannot reach `localhost`.
 
 **Preflight — check each of these before promising anything, then act per row. Never install anything without asking first, and ask about each missing dependency separately; a yes to one is not permission for another.**
@@ -16,11 +18,11 @@ Drive a local HTML prototype with Playwright and render it frame by frame, then 
 | Google Chrome | `ls /Applications/Google\ Chrome.app` | **Say so and stop.** Not something to install on the user's behalf — point them at downloading it themselves. |
 | Homebrew | `which brew` | Only matters if ffmpeg is also missing (next row). If both are missing, say so and stop — don't install Homebrew either. |
 | ffmpeg | `which ffmpeg` | **Ask first**, with `AskUserQuestion` — offer to run `brew install ffmpeg`, stating plainly that this downloads and installs a package via Homebrew. Run it only after a yes. |
-| `playwright-core` | `node -e "require.resolve('playwright-core')"` from the folder that will run the recorder | **Ask first**, with `AskUserQuestion` — offer to run `npm install playwright-core` in that folder. Run it only after a yes. |
+| `protoreel` package | `npx --no-install protoreel --version` from the working directory (§3) | **Ask first**, with `AskUserQuestion` — offer to run `npm install protoreel` in that directory (it brings `playwright-core` with it). If it isn't on npm yet, `npm install github:seq000/protoreel`. Run it only after a yes. |
 
 ## Workflow
 
-Run the interview first (§1), then build and run the recorder (§2–4), then verify before encoding (§5).
+Run the interview first (§1), then discover selectors (§2), write the config and run the recorder (§3–4), then verify before handing anything over (§5).
 
 ### 1. Interview
 
@@ -30,32 +32,30 @@ Ask with the `AskUserQuestion` tool — **and only that tool.** One question at 
 
 1. **Source** — a local `.html` file on disk, or a `localhost` URL. Offer any dev server already running (`curl -s -o /dev/null -w "%{http_code}" http://localhost:PORT`) as a concrete option. A remote public URL works too but warn that the page must load without auth.
 2. **Viewport** — `390 × 844` (iPhone), `1440 × 900` (desktop), `1280 × 800` (tablet/laptop), or custom. If the prototype has its own fixed device stage, read its size from the DOM and offer that as the first option.
-3. **Device frame** — a Figma node URL (export it, see `references/device-frames.md`), a PNG already on disk, or none. Frames only make sense for phone/tablet captures.
+3. **Device frame** — a Figma node URL (export it, see `docs/device-frames.md`), a PNG already on disk, or none. Frames only make sense for phone/tablet captures.
 4. **Pointer** — touch ripple (mobile), desktop cursor, or none.
-5. **The steps** — either the user dictates them, or points at a screen recording (`.mov`/`.mp4`) of themselves clicking through. For a recording, follow `references/steps-from-recording.md`: sample frames, read what changed, and write the step list — **reproduce only the interactions, never the hunting**, and confirm the derived list before recording.
+5. **The steps** — either the user dictates them, or points at a screen recording (`.mov`/`.mp4`) of themselves clicking through. For a recording, follow `docs/steps-from-recording.md`: sample frames, read what changed, and write the step list — **reproduce only the interactions, never the hunting**, and confirm the derived list before recording.
 6. **Output** — WebM + MP4 + poster, MP4 only, or GIF. **Always ask; do not assume.** Also ask where the files should be written.
 
 Summarise the plan in two or three lines and get a yes before running anything.
 
 ### 2. Discover selectors
 
-Never guess selectors. Open the page once and list what is actually there, so the step list references real elements:
+Never guess selectors. Write the config skeleton first (§3, just `source` and `view`), then list what is actually on the page:
 
-```js
-// in a throwaway Playwright script
-page.evaluate(() => [...document.querySelectorAll('button, a, [role=button], input, [data-*]')]
-  .map(el => ({ tag: el.tagName, id: el.id, cls: el.className, text: el.textContent.trim().slice(0, 40) })))
+```bash
+npx protoreel inspect walkthrough.config.mjs
 ```
 
-Prefer stable hooks — `#id`, `[data-x]`, `.class[data-opt="…"]` — over nth-child.
+It prints every button, link, input and `data-*`-carrying element with its id, classes and text. Prefer stable hooks — `#id`, `[data-x]`, `.class[data-opt="…"]` — over nth-child.
 
-### 3. Write the recorder
+### 3. Write the config
 
-Copy `assets/record.template.mjs` into a gitignored working directory next to the prototype (or into the project's existing scratch/wireframe directory if it has one), fill in the config block, and write the step list at the bottom. Keep the script — the user will want to adjust pacing and re-run.
+Work in a gitignored directory next to the prototype (or the project's existing scratch/wireframe directory if it has one). Install the package there if the preflight said it's missing, then copy `examples/walkthrough.config.example.mjs` to `walkthrough.config.mjs`, fill in the settings, and write the walkthrough. Keep the file — the user will want to adjust pacing and re-run.
 
-The template already implements everything in `references/frame-stepping.md`. Read that file before modifying the timing code; the two clocks and their failure modes are the whole reason this works.
+Relative paths in the config (`source`, `frame.png`, `outDir`) resolve against the config file, not the shell's cwd.
 
-Available step verbs:
+The walkthrough is an async function that receives the step verbs:
 
 | Verb | What it does |
 |---|---|
@@ -64,19 +64,26 @@ Available step verbs:
 | `hold(frames)` | Rests; animations and the ripple keep running |
 | `moveTo(x, y, frames)` | Repositions the pointer without clicking |
 | `fadeOut(frames)` | Fades the pointer out at the end |
+| `extent(selector, axis)` | Scrollable extent, for dragging exactly to the end rather than guessing |
 
-Frames are 1/60 s. A comfortable read is 30–50 frames after a tap, 70–90 after something that changes the whole screen.
+Frames are 1/60 s. A comfortable read is 30–50 frames after a tap, 70–90 after something that changes the whole screen. The example config's opening `paint(); hold(45)` and closing `fadeOut(18); hold(60)` are the usual bookends — keep them.
+
+`docs/frame-stepping.md` explains the two clocks and their failure modes; read it before touching anything about timing, and don't re-derive it from `src/recorder.js`.
 
 ### 4. Run it
 
-Run from the Mac shell. A 25–30 s clip takes roughly 2–3 minutes: most of the time is one screenshot per frame.
+```bash
+npx protoreel walkthrough.config.mjs [name]
+```
+
+From the Mac shell. A 25–30 s clip takes roughly 2–3 minutes: most of the time is one screenshot per frame. It prints the frame count, tap count and output file sizes; the files land in the config's `outDir`.
 
 ### 5. Verify before you hand it over
 
 The recorder writes `out/taps.json` — every tap with its frame number and pointer coordinates. Use it:
 
-- **Read a few frames around each tap** and check the pointer is on the element and the ripple is visible. Do not crop blind; use the coordinates from `taps.json`.
-- **Confirm the file plays**: `ffprobe` the output for codec, dimensions, frame rate and duration. Report those numbers, not "done".
+- **Read a few frames around each tap** (`.frames/00039.png` etc.) and check the pointer is on the element and the ripple is visible. Do not crop blind; use the coordinates from `taps.json`.
+- **Confirm the file plays**: `ffprobe` the output for codec, dimensions, frame rate and duration (recipe in `docs/encoding.md`). Report those numbers, not "done".
 - If a tap target sat outside the viewport the run **throws by design** — that is the guard in `tap()`, and it means the step list needs a scroll or swipe before that tap, not a bigger viewport.
 
 Then present the files with `present_files`.
@@ -84,19 +91,20 @@ Then present the files with `present_files`.
 ## Rules
 
 - **The interview is `AskUserQuestion`, full stop.** Never build a substitute form with a different tool (a widget, artifact, canvas). On 3 Sep 2026, a custom HTML form was built instead — the user never saw it, had to ask where it went, and the session fell back to plain chat questions. Nothing about a richer-looking form is worth that failure mode: `AskUserQuestion` is the only interview surface every install of this skill can rely on.
-- **Never install a missing dependency without asking first.** ffmpeg and `playwright-core` are common enough gaps on a fresh install that it's worth offering to fix them — but offer, don't assume. Chrome is never installed on the user's behalf at all.
+- **Never install a missing dependency without asking first.** ffmpeg and the `protoreel` package are common enough gaps on a fresh install that it's worth offering to fix them — but offer, don't assume. Chrome is never installed on the user's behalf at all.
 - **Never claim a recording is finished without inspecting frames.** Correct-looking code is not evidence.
 - **Ripple timing runs on the frame clock, not on pointer movement.** If it only advances while the pointer moves, it freezes mid-bloom during holds and reads as if the *next* move triggered it.
 - **Reproduce interactions, not mouse wandering.** A recording of someone searching a list is not a script.
-- **Keep the recorder script.** Pacing always needs a second pass.
+- **Keep the config file.** Pacing always needs a second pass.
 - **Portrait clips break landscape figure layouts.** If the output is going into a web page, say so — a 0.59-ratio video at full figure width paints enormous, and needs a width cap.
 
 ## References
 
 | File | Read when |
 |---|---|
-| `references/frame-stepping.md` | Before touching timing, or when a transition looks wrong |
-| `references/device-frames.md` | Compositing into a Figma phone/tablet mockup |
-| `references/steps-from-recording.md` | Deriving the step list from a screen recording |
-| `references/encoding.md` | Choosing codecs, sizes, posters, GIFs |
-| `assets/record.template.mjs` | The recorder itself — copy, don't rewrite |
+| `docs/frame-stepping.md` | Before touching timing, or when a transition looks wrong |
+| `docs/device-frames.md` | Compositing into a Figma phone/tablet mockup |
+| `docs/steps-from-recording.md` | Deriving the step list from a screen recording |
+| `docs/encoding.md` | Choosing codecs, sizes, posters, GIFs; the ffprobe recipe |
+| `examples/walkthrough.config.example.mjs` | The config to copy — settings plus the walkthrough |
+| `src/recorder.js` | The engine. Read only to debug; the docs above are the intended explanation |

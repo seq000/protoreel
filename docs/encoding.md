@@ -3,6 +3,10 @@
 Frames are numbered PNGs in `.frames/`; ffmpeg reads them as an image sequence at the
 capture frame rate. There is no audio anywhere in this pipeline.
 
+`protoreel` runs the commands below for you — `output: ['webm', 'mp4', 'poster']` in
+the config picks which (add `'gif'` for a GIF). This page is the reasoning behind the
+flags, and the recipe if you want to re-encode `.frames/` by hand.
+
 ## Web (the default pair)
 
 Two files, because no single codec is both small and universally supported:

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>protoreel fixture</title>
+<style>
+  html, body { margin: 0; background: #f4f4f2; font: 14px/1.4 system-ui, sans-serif; color: #1c1c1c; }
+  #box { position: absolute; left: 24px; top: 24px; width: 48px; height: 48px; background: #ff4402;
+         border-radius: 8px; transition: transform 300ms cubic-bezier(.4, 0, .2, 1); }
+  #box.moved { transform: translateX(200px); }
+  #go { position: absolute; left: 24px; bottom: 24px; padding: 10px 16px; border: 0; border-radius: 6px;
+        background: #050533; color: #fff; font: inherit; }
+  #count { position: absolute; right: 24px; bottom: 30px; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+  <div id="box"></div>
+  <button id="go" data-role="trigger">Move</button>
+  <span id="count">0</span>
+  <script>
+    let n = 0;
+    document.getElementById('go').addEventListener('click', () => {
+      document.getElementById('box').classList.toggle('moved');
+      setTimeout(() => { document.getElementById('count').textContent = String(++n); }, 500);
+    });
+  </script>
+</body>
+</html>

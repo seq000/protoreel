@@ -1,0 +1,53 @@
+{
+  "name": "protoreel",
+  "version": "0.1.0",
+  "description": "Frame-stepped video recorder for HTML prototypes — deterministic 60fps click-throughs, no screen capture.",
+  "type": "module",
+  "bin": {
+    "protoreel": "bin/record.mjs"
+  },
+  "exports": "./src/recorder.js",
+  "files": [
+    "bin",
+    "src",
+    "docs",
+    "examples",
+    "skills",
+    ".claude-plugin",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "test": "node test/run.mjs",
+    "build:plugin": "node scripts/build-plugin.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "playwright-core": "^1.62.1"
+  },
+  "keywords": [
+    "prototype",
+    "video",
+    "playwright",
+    "figma",
+    "portfolio",
+    "case-study",
+    "walkthrough",
+    "screen-recording",
+    "design-tools"
+  ],
+  "author": {
+    "name": "Dariusz Fraczyk",
+    "url": "https://fraczyk.design"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/seq000/protoreel.git"
+  },
+  "homepage": "https://github.com/seq000/protoreel#readme",
+  "bugs": {
+    "url": "https://github.com/seq000/protoreel/issues"
+  }
+}

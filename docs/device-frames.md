@@ -7,7 +7,12 @@ as a separate element above.
 
 ## Getting the frame out of Figma
 
-Use `download_assets`, **not** `get_screenshot`:
+Export the frame as PNG at **2×**, **with the screen slot empty or covered** —
+whatever is in the slot will sit behind the live prototype and show through at the
+corners. In Figma's export panel that's the node → Export → PNG → 2x.
+
+If you're driving Figma through its MCP connector (as the Claude skill does), use
+`download_assets`, **not** `get_screenshot`:
 
 ```
 download_assets  fileKey=<key>  nodeId=<node>  defaultFormat=png  defaultScale=2
@@ -15,12 +20,9 @@ download_assets  fileKey=<key>  nodeId=<node>  defaultFormat=png  defaultScale=2
 
 `get_screenshot`'s `maxDimension` is a ceiling, not a scale — asking for 2× on a
 488px node returns 488px, silently. `download_assets` has a real `defaultScale`
-(max 4). Export the frame **with the screen slot empty or covered**; whatever is in
-the slot will sit behind the live prototype and show through at the corners.
-
-For a mockup that uses a Figma component with a `screen` slot, `get_metadata` on the
-frame gives you the slot's x/y/width/height directly — that is the fastest route to
-the numbers below.
+(max 4). For a mockup built from a component with a `screen` slot, `get_metadata` on
+the frame gives you the slot's x/y/width/height directly — the fastest route to the
+numbers below.
 
 ## Measuring the screen slot
 
@@ -44,6 +46,8 @@ Sanity check the result by rendering frame 0 and comparing its corners against t
 original export at the same crop. They should be indistinguishable.
 
 ## Config
+
+In `walkthrough.config.mjs` (paths resolve against the config file):
 
 ```js
 frame: {

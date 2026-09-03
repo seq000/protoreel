@@ -2,7 +2,8 @@
 
 Real-time screen capture of a browser drops frames, and a screenshot taken while a
 transition is running lands wherever the scheduler happened to be. Both problems
-disappear if the page's own sense of time is under your control.
+disappear if the page's own sense of time is under your control. This is what
+`src/recorder.js` implements; the snippets below are the load-bearing parts of it.
 
 Two clocks must be frozen. Missing either one produces a video that looks *almost*
 right, which is worse than one that obviously fails.

@@ -1,7 +1,8 @@
 # Deriving a step list from a screen recording
 
-The user hands over a `.mov` of themselves clicking through the prototype. Read it,
-extract what they *did*, and throw away how they got there.
+You have a `.mov` of someone clicking through the prototype and need to turn it into
+a `walkthrough()`. Read it, extract what they *did*, and throw away how they got
+there.
 
 ## Sample, don't watch
 
@@ -12,7 +13,7 @@ mkdir -p /tmp/rec && ffmpeg -v error -y -i rec.mov -vf "fps=2,scale=-2:600" /tmp
 
 2 fps is enough to see every state change in a UI walkthrough and keeps a 40 s
 recording to ~80 frames. Tile them into contact sheets of 20 and read those, rather
-than pulling 80 images into the conversation one at a time:
+than 80 images one at a time:
 
 ```python
 from PIL import Image; import glob
@@ -50,6 +51,7 @@ step list is wrong, not the prototype.
 
 ## Confirm before recording
 
-Show the derived list as taps/scrolls/holds in order and ask for a yes. Two or three
-minutes of rendering is cheap, but so is a correction — and the user is the only one
-who knows whether a detour was hunting or a deliberate demonstration.
+If you're deriving the list for someone else, show it as taps/scrolls/holds in order
+and get a yes before rendering. Two or three minutes of rendering is cheap, but so is
+a correction — and the person who made the recording is the only one who knows
+whether a detour was hunting or a deliberate demonstration.
