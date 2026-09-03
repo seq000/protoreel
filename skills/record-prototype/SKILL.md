@@ -15,7 +15,9 @@ Run the interview first (§1), then build and run the recorder (§2–4), then v
 
 ### 1. Interview
 
-Ask with `AskUserQuestion`, one question at a time or grouped — but **infer whatever the conversation already answers and skip those questions**. If the user already named the file, don't ask for the source.
+Ask with the `AskUserQuestion` tool — **and only that tool.** One question at a time or grouped (it allows up to four per call). Do **not** substitute a custom-built form — an HTML widget, artifact, canvas, or anything else — even if the current environment offers a fancier way to "collect arguments" and it looks like a better fit. `AskUserQuestion` is the one interview mechanism guaranteed to exist wherever this skill is installed; anything else is slower to build, isn't guaranteed to render, and has already failed silently once (see Rules).
+
+**Infer whatever the conversation already answers and skip those questions.** If the user already named the file, don't ask for the source.
 
 1. **Source** — a local `.html` file on disk, or a `localhost` URL. Offer any dev server already running (`curl -s -o /dev/null -w "%{http_code}" http://localhost:PORT`) as a concrete option. A remote public URL works too but warn that the page must load without auth.
 2. **Viewport** — `390 × 844` (iPhone), `1440 × 900` (desktop), `1280 × 800` (tablet/laptop), or custom. If the prototype has its own fixed device stage, read its size from the DOM and offer that as the first option.
@@ -72,6 +74,7 @@ Then present the files with `present_files`.
 
 ## Rules
 
+- **The interview is `AskUserQuestion`, full stop.** Never build a substitute form with a different tool (a widget, artifact, canvas). On 3 Sep 2026, a custom HTML form was built instead — the user never saw it, had to ask where it went, and the session fell back to plain chat questions. Nothing about a richer-looking form is worth that failure mode: `AskUserQuestion` is the only interview surface every install of this skill can rely on.
 - **Never claim a recording is finished without inspecting frames.** Correct-looking code is not evidence.
 - **Ripple timing runs on the frame clock, not on pointer movement.** If it only advances while the pointer moves, it freezes mid-bloom during holds and reads as if the *next* move triggered it.
 - **Reproduce interactions, not mouse wandering.** A recording of someone searching a list is not a script.
