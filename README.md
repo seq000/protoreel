@@ -34,9 +34,8 @@ in your project, so adjusting pacing and re-running is one command.
 
 Runs on macOS with:
 
-- Google Chrome
-- `ffmpeg` (`brew install ffmpeg`)
-- `playwright-core` available to Node — either installed in the project or globally
+- **Google Chrome** — install this yourself first; Claude won't install it for you.
+- `ffmpeg` and `playwright-core` — if either is missing, Claude checks, asks, and (with your yes) installs it: `brew install ffmpeg` or `npm install playwright-core` in your project. Nothing gets installed without asking first.
 
 It also needs a real local shell (the Desktop Commander plugin, or any equivalent).
 The sandboxed Linux shell can't reach a browser or `localhost`.

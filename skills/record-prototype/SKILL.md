@@ -7,7 +7,16 @@ description: Records a click-through walkthrough of an HTML prototype as a video
 
 Drive a local HTML prototype with Playwright and render it frame by frame, then encode with ffmpeg. Nothing is captured in real time — both the CSS animation clock and `setTimeout` are frozen and advanced 1/60 s per screenshot, so no frame is dropped, no transition is caught mid-race, and a re-run is byte-identical.
 
-**Requires a Mac shell** (Desktop Commander `start_process` or an equivalent local shell), Google Chrome, `playwright-core`, and ffmpeg. The sandboxed Linux shell cannot do this — it has no browser and cannot reach `localhost`. Check with `which ffmpeg` and `ls /Applications/Google\ Chrome.app` before promising anything; if either is missing, say so and stop.
+**Requires a Mac shell** (Desktop Commander `start_process` or an equivalent local shell) — the sandboxed Linux shell cannot do this, it has no browser and cannot reach `localhost`.
+
+**Preflight — check each of these before promising anything, then act per row. Never install anything without asking first, and ask about each missing dependency separately; a yes to one is not permission for another.**
+
+| Dependency | Check | If missing |
+|---|---|---|
+| Google Chrome | `ls /Applications/Google\ Chrome.app` | **Say so and stop.** Not something to install on the user's behalf — point them at downloading it themselves. |
+| Homebrew | `which brew` | Only matters if ffmpeg is also missing (next row). If both are missing, say so and stop — don't install Homebrew either. |
+| ffmpeg | `which ffmpeg` | **Ask first**, with `AskUserQuestion` — offer to run `brew install ffmpeg`, stating plainly that this downloads and installs a package via Homebrew. Run it only after a yes. |
+| `playwright-core` | `node -e "require.resolve('playwright-core')"` from the folder that will run the recorder | **Ask first**, with `AskUserQuestion` — offer to run `npm install playwright-core` in that folder. Run it only after a yes. |
 
 ## Workflow
 
@@ -75,6 +84,7 @@ Then present the files with `present_files`.
 ## Rules
 
 - **The interview is `AskUserQuestion`, full stop.** Never build a substitute form with a different tool (a widget, artifact, canvas). On 3 Sep 2026, a custom HTML form was built instead — the user never saw it, had to ask where it went, and the session fell back to plain chat questions. Nothing about a richer-looking form is worth that failure mode: `AskUserQuestion` is the only interview surface every install of this skill can rely on.
+- **Never install a missing dependency without asking first.** ffmpeg and `playwright-core` are common enough gaps on a fresh install that it's worth offering to fix them — but offer, don't assume. Chrome is never installed on the user's behalf at all.
 - **Never claim a recording is finished without inspecting frames.** Correct-looking code is not evidence.
 - **Ripple timing runs on the frame clock, not on pointer movement.** If it only advances while the pointer moves, it freezes mid-bloom during holds and reads as if the *next* move triggered it.
 - **Reproduce interactions, not mouse wandering.** A recording of someone searching a list is not a script.
