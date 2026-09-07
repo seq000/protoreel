@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.2] — 2026-09-07
+
+### Fixed
+
+- The packaged `.plugin` was rejected on install: *"Plugin contains a top-level
+  `bin/` directory."* A claude.ai-hosted plugin may not ship executables, since
+  they land on PATH via the CLI without appearing on the admin approval surface.
+  The bundle no longer includes `bin/`, `src/` or `package.json` — the engine
+  comes from npm, which is where it has lived since 0.1.0, so the plugin only
+  needs the skill, `docs/` and `examples/`. `build-plugin.mjs` now fails the
+  build if any of those paths reappear, rather than producing a zip that only
+  fails at install time.
+- The npm package is unaffected; it still ships the CLI, and this changes only
+  what goes inside the Claude/Cowork plugin bundle.
+
 ## [0.1.1] — 2026-09-07
 
 ### Fixed

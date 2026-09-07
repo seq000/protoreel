@@ -1,6 +1,6 @@
 {
   "name": "protoreel",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Frame-stepped video recorder for HTML prototypes \u2014 deterministic 60fps click-throughs, no screen capture.",
   "type": "module",
   "bin": {

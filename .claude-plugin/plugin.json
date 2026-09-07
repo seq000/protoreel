@@ -1,6 +1,6 @@
 {
   "name": "protoreel",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Records a click-through walkthrough of a local HTML prototype as a deterministic 60fps video, optionally composited inside a device frame exported from Figma.",
   "author": {
     "name": "Dariusz Fraczyk",

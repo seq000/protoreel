@@ -7,7 +7,7 @@ description: Records a click-through walkthrough of an HTML prototype as a video
 
 Drive a local HTML prototype with Playwright and render it frame by frame, then encode with ffmpeg. Nothing is captured in real time — both the CSS animation clock and `setTimeout` are frozen and advanced 1/60 s per screenshot, so no frame is dropped, no transition is caught mid-race, and a re-run is byte-identical.
 
-The engine is the `protoreel` npm package (this plugin's repo root). This skill is a thin wrapper: it runs the interview, writes a config file, and runs the CLI. Paths below like `docs/…` and `examples/…` are relative to the plugin root — two levels up from this file.
+The engine is the [`protoreel`](https://www.npmjs.com/package/protoreel) npm package. This skill is a thin wrapper: it runs the interview, writes a config file, and runs the CLI with `npx`. **The plugin does not contain the engine** — it ships only this skill plus `docs/` and `examples/`, because a claude.ai-hosted plugin may not carry a top-level `bin/`. So the package always comes from npm, installed into the user's working directory (see the preflight). Paths below like `docs/…` and `examples/…` are relative to the plugin root — two levels up from this file.
 
 **Requires a Mac shell** (Desktop Commander `start_process` or an equivalent local shell) — the sandboxed Linux shell cannot do this, it has no browser and cannot reach `localhost`.
 
