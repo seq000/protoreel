@@ -18,7 +18,7 @@ The engine is the `protoreel` npm package (this plugin's repo root). This skill 
 | Google Chrome | `ls /Applications/Google\ Chrome.app` | **Say so and stop.** Not something to install on the user's behalf — point them at downloading it themselves. |
 | Homebrew | `which brew` | Only matters if ffmpeg is also missing (next row). If both are missing, say so and stop — don't install Homebrew either. |
 | ffmpeg | `which ffmpeg` | **Ask first**, with `AskUserQuestion` — offer to run `brew install ffmpeg`, stating plainly that this downloads and installs a package via Homebrew. Run it only after a yes. |
-| `protoreel` package | `npx --no-install protoreel --version` from the working directory (§3) | **Ask first**, with `AskUserQuestion` — offer to run `npm install protoreel` in that directory (it brings `playwright-core` with it). If it isn't on npm yet, `npm install github:seq000/protoreel`. Run it only after a yes. |
+| `protoreel` package | `npx --no-install protoreel --version` from the working directory (§3) | **Ask first**, with `AskUserQuestion` — offer to run `npm install protoreel` in that directory (it brings `playwright-core` with it). Run it only after a yes. |
 
 ## Workflow
 
@@ -28,7 +28,7 @@ Run the interview first (§1), then discover selectors (§2), write the config a
 
 Ask with the `AskUserQuestion` tool — **and only that tool.** One question at a time or grouped (it allows up to four per call). Do **not** substitute a custom-built form — an HTML widget, artifact, canvas, or anything else — even if the current environment offers a fancier way to "collect arguments" and it looks like a better fit. `AskUserQuestion` is the one interview mechanism guaranteed to exist wherever this skill is installed; anything else is slower to build, isn't guaranteed to render, and has already failed silently once (see Rules).
 
-**Infer whatever the conversation already answers and skip those questions.** If the user already named the file, don't ask for the source.
+**Skip a question only when the user has already stated that answer in this conversation, in words.** If they named the file, don't ask for the source. That is the whole licence: an answer you worked out, assumed, or think is obvious from the prototype is **not** an answer they gave, and the question still gets asked. Never skip a question because a default seems sensible or because asking feels redundant.
 
 1. **Source** — a local `.html` file on disk, or a `localhost` URL. Offer any dev server already running (`curl -s -o /dev/null -w "%{http_code}" http://localhost:PORT`) as a concrete option. A remote public URL works too but warn that the page must load without auth.
 2. **Viewport** — `390 × 844` (iPhone), `1440 × 900` (desktop), `1280 × 800` (tablet/laptop), or custom. If the prototype has its own fixed device stage, read its size from the DOM and offer that as the first option.
@@ -37,7 +37,14 @@ Ask with the `AskUserQuestion` tool — **and only that tool.** One question at 
 5. **The steps** — either the user dictates them, or points at a screen recording (`.mov`/`.mp4`) of themselves clicking through. For a recording, follow `docs/steps-from-recording.md`: sample frames, read what changed, and write the step list — **reproduce only the interactions, never the hunting**, and confirm the derived list before recording.
 6. **Output** — WebM + MP4 + poster, MP4 only, or GIF. **Always ask; do not assume.** Also ask where the files should be written.
 
-Summarise the plan in two or three lines and get a yes before running anything.
+Then summarise the plan and get a yes before running anything. **The summary lists every setting above with the value it will use — all six, every time**, and marks any value the user did not state themselves as `(assumed)`. This is the backstop: if a question was skipped when it shouldn't have been, this is where it becomes visible, before two or three minutes of recording. A summary that omits a setting because it "wasn't discussed" defeats the point.
+
+```
+Source: ./index.html · Viewport: 390×844 · Frame: none (assumed)
+Pointer: touch ripple (assumed) · Output: WebM + MP4 + poster → ./out
+Steps: open filters → pick Ceramics → scroll results → close
+Record it?
+```
 
 ### 2. Discover selectors
 
@@ -91,6 +98,7 @@ Then present the files with `present_files`.
 ## Rules
 
 - **The interview is `AskUserQuestion`, full stop.** Never build a substitute form with a different tool (a widget, artifact, canvas). On 3 Sep 2026, a custom HTML form was built instead — the user never saw it, had to ask where it went, and the session fell back to plain chat questions. Nothing about a richer-looking form is worth that failure mode: `AskUserQuestion` is the only interview surface every install of this skill can rely on.
+- **Ask all six interview questions unless the user already answered one in words.** On 5 Sep 2026 a run never asked about the device frame or the pointer; both are in §1, and the session skipped them under the old "infer what the conversation answers" line, then wrote a plan summary that didn't mention them either — so the user only found out by watching the finished video. Pointer and frame have no safe default: they change what the clip looks like, and a wrong guess costs a full re-record. Inference is not an answer.
 - **Never install a missing dependency without asking first.** ffmpeg and the `protoreel` package are common enough gaps on a fresh install that it's worth offering to fix them — but offer, don't assume. Chrome is never installed on the user's behalf at all.
 - **Never claim a recording is finished without inspecting frames.** Correct-looking code is not evidence.
 - **Ripple timing runs on the frame clock, not on pointer movement.** If it only advances while the pointer moves, it freezes mid-bloom during holds and reads as if the *next* move triggered it.

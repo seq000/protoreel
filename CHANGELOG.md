@@ -4,6 +4,23 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] — 2026-09-07
+
+### Fixed
+
+- The interview could silently skip questions. All six were specified, but the
+  instruction to "infer whatever the conversation already answers" was broad
+  enough that a run never asked about the device frame or the pointer — two
+  settings with no safe default, where a wrong guess costs a full re-record.
+  Skipping is now allowed only when the user stated that answer in words;
+  inference is explicitly not an answer.
+- The plan summary is now required to list all six settings with their values,
+  marking any the user didn't choose as `(assumed)`. It's the backstop that
+  should have caught the above and didn't, because it was free to mention only
+  what had been discussed.
+- Dropped the preflight's `npm install github:seq000/protoreel` fallback and
+  the README's GitHub install line — the package is on npm as of 0.1.0.
+
 ## [0.1.0] — 2026-09-03
 
 First public release.
