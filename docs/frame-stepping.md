@@ -5,8 +5,25 @@ transition is running lands wherever the scheduler happened to be. Both problems
 disappear if the page's own sense of time is under your control. This is what
 `src/recorder.js` implements; the snippets below are the load-bearing parts of it.
 
-Two clocks must be frozen. Missing either one produces a video that looks *almost*
-right, which is worse than one that obviously fails.
+**Every clock the page can read must be frozen.** Missing one produces a video
+that looks *almost* right, which is worse than one that obviously fails. There
+are six, and 0.1.x froze two of them:
+
+| Clock | Who uses it |
+|---|---|
+| CSS / WAAPI | transitions, keyframes |
+| `setTimeout` | delays, staged reveals |
+| `setInterval` | on-screen clocks, polling |
+| `requestAnimationFrame` | JS animation, canvas, map easings, physics |
+| `performance.now` | anything measuring elapsed time |
+| `Date` | displayed clocks, ETAs, "arrives at 09:41" |
+
+The last four were added in 0.2.0, after a recording of a car-navigation
+prototype came out reading `Time left 0:00 · Distance -82562090`. The drive
+simulation ran on `requestAnimationFrame` and `performance.now`, which were
+still on the wall clock: a screenshot costs ~130 ms of real time, so across a
+41-second clip the car drove several hours of route. It read as a data bug in
+the prototype. It was a clock bug in the recorder.
 
 ## Clock 1 — CSS transitions and animations
 
@@ -35,7 +52,7 @@ frame. You should see a smooth eased curve over ~20–25 frames. A column of ide
 numbers means the freeze took but the ticking didn't; a jump from start to end in one
 frame means the freeze didn't take.
 
-## Clock 2 — `setTimeout`
+## Clocks 2–6 — the page's own timers
 
 Prototypes use timers for the things a CSS transition can't express: removing a chip
 after its exit animation, swapping a count after a fade, re-rendering a grid. Those
@@ -45,27 +62,39 @@ they fire in the wrong frame — or several at once during a long screenshot.
 Replace the timer with a queue **before the page loads**, so the page's own script
 picks up the replacement:
 
+All five are replaced in one `addInitScript` — see `src/recorder.js` for the
+full version. The shape:
+
 ```js
-await page.addInitScript(() => {
-  const q = []; let now = 0, id = 0;
-  window.setTimeout = (fn, ms = 0, ...a) => { q.push({ id: ++id, at: now + ms, fn, a }); return id; };
-  window.clearTimeout = (i) => { const k = q.findIndex(t => t.id === i); if (k >= 0) q.splice(k, 1); };
-  window.__vtick = (dt) => {
-    now += dt;
-    q.sort((a, b) => a.at - b.at);
-    while (q.length && q[0].at <= now) { const t = q.shift(); try { t.fn(...t.a); } catch (e) { console.error(e); } }
-  };
-});
+window.setTimeout  = (fn, ms, ...a) => { timers.push({ at: now + ms, fn, a }); … };
+window.setInterval = (fn, ms, ...a) => { timers.push({ at: now + ms, every: ms, fn, a }); … };
+window.requestAnimationFrame = (fn) => { raf.push({ fn }); … };
+Object.defineProperty(window.performance, 'now', { value: () => now });
+window.Date = VDate;                       // reports clock.start + now
+
+window.__vtick = () => {
+  ticks++;
+  now = ticks * 1000 / fps;                // computed, never accumulated
+  runDueTimers();                          // timers first: one may schedule a frame
+  runRafCallbacks(now);
+};
 ```
 
-Then call `window.__vtick(dt)` in the same evaluate as the animation tick.
+`addInitScript` runs before any page script, which is what makes this work —
+patching after `goto` misses any timer the page armed during load, and misses a
+library that captured `requestAnimationFrame` at module scope entirely.
 
-`addInitScript` runs before any page script, which is what makes this work — patching
-after `goto` misses any timer the page armed during load.
+> [!warning] Compute the clock, don't accumulate it
+> `now += dt` looks equivalent and is not. 1000/60 has no exact binary
+> representation, and 180 additions of it land on 2999.9999999999995 — enough to
+> make a 100 ms interval miss its 30th fire and an on-screen clock read 09:41:02
+> instead of 09:41:03. `ticks * 1000 / fps` is exact integer arithmetic for any
+> integer fps. Both failures showed up in the test suite the day this was written.
 
-**`setInterval` is not patched.** If a prototype animates with an interval or a
-`requestAnimationFrame` loop, that loop is still on the real clock and will be
-sampled unevenly. Patch it the same way, or accept the artefact knowingly.
+**`Date` is fixed, not just frozen.** It starts at `config.clock.start`
+(default `09:41:00`) and advances with the frame clock, so a clock or an ETA
+rendered on screen is a deliberate choice and identical between runs. Pass
+`clock: false` to leave the page's `Date` alone.
 
 ## The frame loop
 

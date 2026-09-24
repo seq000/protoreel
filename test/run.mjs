@@ -11,10 +11,11 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import { record, preflight } from '../src/recorder.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const { default: config } = await import(pathToFileURL(path.join(here, 'fixture.config.mjs')).href);
+const { default: config, probe } = await import(pathToFileURL(path.join(here, 'fixture.config.mjs')).href);
 
-const EXPECT_FRAMES = 100;
-const EXPECT_TAP_FRAME = 10 + 24 + 5;   // hold + moveTo + press ticks
+const EXPECT_FRAMES = 180;
+const EXPECT_TAP_FRAME = 10 + 24 + 5;   // hold + moveTo + squash ticks, then pointerdown
+const DT = 1000 / 60;
 
 let failures = 0;
 const check = (ok, msg) => { console.log((ok ? '  ok  ' : '  FAIL') + ' ' + msg); if (!ok) failures++; };
@@ -28,14 +29,32 @@ const h1 = hashFrames(r1.frameDir);
 
 check(r1.frames === EXPECT_FRAMES, `frame count ${r1.frames} (expected ${EXPECT_FRAMES})`);
 const taps = JSON.parse(fs.readFileSync(path.join(r1.outDir, 'taps.json'), 'utf8'));
-check(taps.length === 1 && taps[0].sel === '#go', `taps.json has one tap on #go`);
+check(taps.length === 2 && taps[0].sel === '#go' && taps[1].sel === '#handle', 'taps.json records the tap and the drag press');
 check(taps[0]?.frame === EXPECT_TAP_FRAME, `tap landed on frame ${taps[0]?.frame} (expected ${EXPECT_TAP_FRAME})`);
 
-// clocks tick: the box is mid-transition at frames 41..50, so they must differ;
-// everything has settled by frame 90 (ripple done, pointer faded), so 98 == 99.
+/* Real input: none of this responds to element.click(). A handle that moved is
+ * proof the page received trusted pointerdown/move/up with pointer capture. */
+check(probe.beforeDrag.handleX === 0, `handle starts at 0 (was ${probe.beforeDrag.handleX})`);
+check(probe.afterDrag.handleX === 150, `handle dragged to 150 (was ${probe.afterDrag.handleX})`);
+check(probe.end.count === '1', `the tap fired the click handler and its virtual setTimeout (count ${probe.end.count})`);
+
+/* Every clock reads the frame clock, not the wall clock. At the last frame
+ * exactly EXPECT_FRAMES ticks have run, so each of these is arithmetic, not a
+ * measurement — ±1 only to absorb float rounding in the page's Math.round. */
+const near = (a, b, t = 1) => Math.abs(a - b) <= t;
+check(near(probe.end.perf, EXPECT_FRAMES * DT), `performance.now ${probe.end.perf}ms (expected ${Math.round(EXPECT_FRAMES * DT)})`);
+check(probe.end.raf === EXPECT_FRAMES, `requestAnimationFrame ran once per frame: ${probe.end.raf} (expected ${EXPECT_FRAMES})`);
+check(probe.end.interval === 30, `setInterval(100ms) fired ${probe.end.interval} times in 3s (expected 30)`);
+check(probe.end.date === '09:41:03', `Date starts at the configured 09:41:00 and advances 3s → ${probe.end.date}`);
+
+// The box transitions just after the pointer lifts, so 41..50 must differ; the
+// handle is mid-drag at 120..130; by 177 everything has settled — ripple gone,
+// pointer faded — so consecutive tail frames must be byte-identical, which is
+// what proves nothing is quietly running on a wall clock.
 const byName = Object.fromEntries(h1);
 check(byName['00041.png'] !== byName['00050.png'], 'frames differ while the transition runs (animation clock ticks)');
-check(byName['00098.png'] === byName['00099.png'], 'frames identical once settled (nothing runs on a wall clock)');
+check(byName['00120.png'] !== byName['00130.png'], 'frames differ while the handle is being dragged');
+check(byName['00177.png'] === byName['00178.png'], 'frames identical once settled (nothing runs on a wall clock)');
 
 // ffprobe the artefact, not the command
 const { ffprobe } = preflight(config);

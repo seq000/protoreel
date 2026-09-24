@@ -1,9 +1,14 @@
 /* protoreel — frame-stepped prototype recorder (the engine).
  *
- * Nothing is captured in real time. The CSS animation clock is frozen over CDP
- * and `setTimeout` is replaced with a virtual queue; each frame advances both
- * by exactly 1/60 s and takes one screenshot. No dropped frames, no races,
- * byte-identical re-runs. See docs/frame-stepping.md for why both clocks matter.
+ * Nothing is captured in real time. Every clock the page can read is frozen and
+ * advanced by exactly 1/60 s per screenshot: the CSS/WAAPI clock over CDP, and
+ * setTimeout, setInterval, requestAnimationFrame, performance.now and Date in
+ * the page. No dropped frames, no races, byte-identical re-runs.
+ *
+ * Input is real. Pointer actions drive Chrome's own input pipeline over CDP, so
+ * the page receives trusted events — pointer capture, hover and drag handlers
+ * all behave as they do for a human. See docs/frame-stepping.md (time) and
+ * docs/pointer-input.md (input).
  */
 import { chromium } from 'playwright-core';
 import { execFileSync } from 'child_process';
@@ -80,6 +85,15 @@ function normalise(config, configDir) {
   c.frameDir = path.resolve(configDir, c.frameDir || './.frames');
   c.output = c.output || ['webm', 'mp4', 'poster'];
   c.gif = { fps: 24, width: 480, ...(c.gif || {}) };
+  // The wall-clock instant the page believes it is. Fixed by default so a clock
+  // or an ETA rendered on screen is deliberate and identical between runs —
+  // pass clock: false to leave the page's Date alone.
+  c.clock = c.clock === false ? false : { start: '2026-01-01T09:41:00', ...(c.clock || {}) };
+  if (c.clock) {
+    const t = new Date(c.clock.start).getTime();
+    if (Number.isNaN(t)) throw new Error(`config.clock.start is not a valid date: ${c.clock.start}`);
+    c.clock.epoch = t;
+  }
   if (!c.source) throw new Error('config.source is required — a file path or an http(s) URL');
   if (!c.frame.png) {
     c.frame.stage = null;
@@ -105,7 +119,7 @@ export async function record(config, opts = {}) {
   const name = opts.name || CONFIG.name || 'walkthrough';
   const log = opts.quiet ? () => {} : (...a) => console.log(...a);
   if (typeof CONFIG.walkthrough !== 'function') {
-    throw new Error('config.walkthrough must be an async function — it receives { tap, drag, hold, moveTo, fadeOut, extent, paint, step, page }');
+    throw new Error('config.walkthrough must be an async function — it receives { tap, hover, press, release, dragTo, longPress, swipe, hold, moveTo, fadeOut, extent, paint, step, page }');
   }
 
   const { ffmpeg: FF } = preflight(CONFIG);
@@ -124,17 +138,68 @@ export async function record(config, opts = {}) {
   const browser = await launch(CONFIG);
   const page = await browser.newPage({ viewport: { width: STAGE.w, height: STAGE.h }, deviceScaleFactor: CONFIG.scale });
 
-  /* virtual setTimeout — fires only when the frame clock ticks */
-  await page.addInitScript(() => {
-    const q = []; let now = 0, id = 0;
-    window.setTimeout = (fn, ms = 0, ...a) => { q.push({ id: ++id, at: now + ms, fn, a }); return id; };
-    window.clearTimeout = (i) => { const k = q.findIndex(t => t.id === i); if (k >= 0) q.splice(k, 1); };
-    window.__vtick = (dt) => {
-      now += dt;
-      q.sort((a, b) => a.at - b.at);
-      while (q.length && q[0].at <= now) { const t = q.shift(); try { t.fn(...t.a); } catch (e) { console.error(e); } }
+  /* ---------- virtual clocks ----------
+   * Installed before load, deliberately: a library that captures
+   * requestAnimationFrame or Date at module scope must capture these, not the
+   * real ones. Everything below advances only when __vtick runs, once per frame.
+   *
+   * Leave any of these real and the page runs at wall-clock speed while each
+   * screenshot costs ~130 ms — a drive simulation overshoots its route, a
+   * timeline scrubs itself, an on-screen clock drifts minutes across a clip
+   * whose own countdown says seconds. See docs/frame-stepping.md.
+   */
+  await page.addInitScript(({ clock, fps }) => {
+    const timers = [];                  // setTimeout + setInterval
+    const raf = [];                     // requestAnimationFrame
+    let now = 0, ticks = 0, id = 0, rid = 0;
+
+    window.setTimeout = (fn, ms = 0, ...a) => { timers.push({ id: ++id, at: now + ms, fn, a }); return id; };
+    window.setInterval = (fn, ms = 0, ...a) => { timers.push({ id: ++id, at: now + ms, every: Math.max(1, ms), fn, a }); return id; };
+    window.clearTimeout = window.clearInterval =
+      (i) => { const k = timers.findIndex(t => t.id === i); if (k >= 0) timers.splice(k, 1); };
+
+    window.requestAnimationFrame = (fn) => { raf.push({ id: ++rid, fn }); return rid; };
+    window.cancelAnimationFrame = (i) => { const k = raf.findIndex(r => r.id === i); if (k >= 0) raf.splice(k, 1); };
+
+    // performance.now is a getter on a prototype in some builds — define, don't assign.
+    try { Object.defineProperty(window.performance, 'now', { value: () => now, configurable: true }); }
+    catch { window.performance.now = () => now; }
+
+    if (clock) {
+      const RealDate = Date;
+      const virtual = () => clock.epoch + now;
+      function VDate(...a) {
+        if (!(this instanceof VDate)) return new RealDate(virtual()).toString();
+        return a.length ? new RealDate(...a) : new RealDate(virtual());
+      }
+      VDate.prototype = RealDate.prototype;
+      VDate.now = virtual;
+      VDate.parse = RealDate.parse;
+      VDate.UTC = RealDate.UTC;
+      window.Date = VDate;
+    }
+
+    window.__vtick = () => {
+      // Computed from the frame count, never accumulated. `now += dt` drifts:
+      // 1000/60 is not representable, and 180 additions of it land on
+      // 2999.9999999999995 — which is enough to make a 100 ms interval miss its
+      // 30th fire and a clock read 09:41:02 instead of 03. ticks * 1000 / fps
+      // is exact integer arithmetic for any integer fps.
+      ticks++;
+      now = ticks * 1000 / fps;
+      // Timers first: a callback may schedule a frame, and that frame should
+      // run in this tick rather than lagging one behind.
+      timers.sort((a, b) => a.at - b.at);
+      for (let guard = 0; guard < 1000; guard++) {
+        const t = timers[0];
+        if (!t || t.at > now) break;
+        if (t.every) { t.at += t.every; timers.sort((a, b) => a.at - b.at); }
+        else timers.shift();
+        try { t.fn(...t.a); } catch (e) { console.error(e); }
+      }
+      for (const r of raf.splice(0, raf.length)) { try { r.fn(now); } catch (e) { console.error(e); } }
     };
-  });
+  }, { clock: CONFIG.clock, fps: FPS });
 
   const url = /^https?:/.test(CONFIG.source) ? CONFIG.source : 'file://' + CONFIG.source;
   await page.goto(url, { waitUntil: 'load' });
@@ -199,6 +264,9 @@ export async function record(config, opts = {}) {
   /* ---------- pointer ---------- */
   const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
   const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+  // Assigned once the input layer below exists; moveTo runs before it in source
+  // order but never before it in time.
+  let sendMove = null;
   const taps = [];
   let fx = CONFIG.view.w / 2, fy = CONFIG.view.h + 80, fo = 0, ring = null;
   const RING_F = 30;                                   // ripple lifetime, frames
@@ -240,26 +308,135 @@ export async function record(config, opts = {}) {
       fx = x0 + dx * t - (dy / len) * bend * s;
       fy = y0 + dy * t + (dx / len) * bend * s;
       if (fadeIn) fo = Math.min(1, o0 + (1 - o0) * easeOut(Math.min(1, i / (frames * 0.5))));
+      // The real pointer follows the drawn one, so :hover, tooltips and
+      // anything tracking pointermove behave as they would for a human.
+      if (sendMove) await sendMove(fx, fy);
       await step();
     }
   };
 
-  const tap = async (sel, after = 30) => {
-    if (!(await visible(sel))) throw new Error(`tap target off-screen: ${sel} — scroll or swipe to it first`);
-    const [x, y] = await centre(sel);
-    await moveTo(x, y, 24, fo < 1);
-    for (let i = 1; i <= 5; i++) {                                  // press
+  /* ---------- real input ----------
+   * The drawn finger lives in prototype coordinates; Chrome's input pipeline
+   * wants stage coordinates. In bare mode that's the identity, inside a device
+   * frame it is not — get this wrong and every click lands in the wrong place
+   * on framed captures while looking perfect on bare ones.
+   */
+  const toStage = (x, y) => (bare ? [x, y] : [SCREEN.x + x * S, SCREEN.y + y * S]);
+  const touchInput = CONFIG.pointer === 'touch';
+  let pressed = false;
+
+  const send = async (kind, x, y) => {
+    const [sx, sy] = toStage(x, y);
+    if (touchInput) {
+      // A touch screen has no hover: only report movement while a finger is
+      // actually down, or the page sees a phantom drag across the whole clip.
+      if (kind === 'move' && !pressed) return;
+      const type = kind === 'down' ? 'touchStart' : kind === 'up' ? 'touchEnd' : 'touchMove';
+      await cdp.send('Input.dispatchTouchEvent', {
+        type,
+        touchPoints: type === 'touchEnd' ? [] : [{ x: sx, y: sy, id: 1 }],
+      });
+    } else {
+      await cdp.send('Input.dispatchMouseEvent', {
+        type: kind === 'down' ? 'mousePressed' : kind === 'up' ? 'mouseReleased' : 'mouseMoved',
+        x: sx, y: sy, button: 'left', clickCount: kind === 'move' ? 0 : 1,
+        buttons: (kind === 'down' || (kind === 'move' && pressed)) ? 1 : 0,
+      });
+    }
+  };
+
+  /* What is actually under the pointer. element.click() always reached its
+   * target even when covered; a real pointer hits whatever is on top, so an
+   * overlay that used to be invisible to the recorder now silently eats the
+   * click. Fail loudly instead. */
+  const hits = async (sel, x, y) => page.evaluate(([s, cx, cy]) => {
+    const top = document.elementFromPoint(cx, cy);
+    const want = document.querySelector(s);
+    if (!want || !top) return { ok: false, top: top ? (top.id || top.className || top.tagName) : 'nothing' };
+    return { ok: want === top || want.contains(top) || top.contains(want), top: top.id || String(top.className) || top.tagName };
+  }, [sel, ...toStage(x, y)]);
+
+  sendMove = (x, y) => send('move', x, y);
+
+  /** Move the pointer over a target without pressing — reveals :hover states. */
+  const hover = async (target, frames = 24) => {
+    const [x, y] = await resolve(target);
+    await moveTo(x, y, frames, fo < 1);
+    await send('move', fx, fy);
+    await step();
+  };
+
+  /** Press and hold. Pair with release(), or use dragTo/longPress. */
+  const press = async (target, frames = 24) => {
+    const [x, y] = await resolve(target);
+    if (Math.abs(x - fx) > 0.5 || Math.abs(y - fy) > 0.5) await moveTo(x, y, frames, fo < 1);
+    await send('move', fx, fy);
+    for (let i = 1; i <= 5; i++) {                                   // finger squash
       await page.evaluate(([a, b, s]) => window.__touch(a, b, s, 1), [fx, fy, 1 - 0.18 * (i / 5)]);
       await tick();
     }
-    await page.evaluate((s) => document.querySelector(s).click(), sel);
+    await send('down', fx, fy);
+    pressed = true;
     ring = { x: fx, y: fy, t: 0 };
-    taps.push({ sel, frame: n, x: Math.round(fx), y: Math.round(fy) });
-    for (let i = 0; i < 5; i++) await step();
-    await hold(after);
+    taps.push({ sel: typeof target === 'string' ? target : `${Math.round(x)},${Math.round(y)}`, frame: n, x: Math.round(fx), y: Math.round(fy) });
+    await step();
   };
 
-  const drag = async (sel, axis, delta, frames = 34) => {
+  const release = async (after = 0) => {
+    await send('up', fx, fy);
+    pressed = false;
+    await page.evaluate(([a, b]) => window.__touch(a, b, 1, 1), [fx, fy]);
+    for (let i = 0; i < 5; i++) await step();
+    if (after) await hold(after);
+  };
+
+  /** A target is a selector, or [x, y] in prototype coordinates. */
+  const resolve = async (target) => {
+    if (Array.isArray(target)) return target;
+    if (!(await visible(target))) throw new Error(`target off-screen: ${target} — scroll or swipe to it first`);
+    return centre(target);
+  };
+
+  const tap = async (sel, after = 30) => {
+    if (typeof sel === 'string') {
+      const h = await hits(sel, ...(await centre(sel)));
+      if (!h.ok) throw new Error(`tap target is covered: ${sel} — "${h.top}" is on top at that point`);
+    }
+    await press(sel);
+    await release(after);
+  };
+
+  /** Press, hold without moving, release — menus that open on a sustained press. */
+  const longPress = async (target, frames = 42, after = 30) => {
+    await press(target);
+    await hold(frames);
+    await release(after);
+  };
+
+  /**
+   * Drag something: press the target, move, release. Real pointer events, so
+   * bezier handles, sliders, scrubbers and canvas editors all work.
+   * @param to  [x, y] absolute in prototype coords, {dx, dy} relative, or a selector
+   */
+  const dragTo = async (target, to, frames = 34, after = 20) => {
+    frames = Math.round(frames * SLOW);
+    await press(target);
+    const x0 = fx, y0 = fy;
+    let tx, ty;
+    if (Array.isArray(to)) [tx, ty] = to;
+    else if (to && (to.dx != null || to.dy != null)) { tx = x0 + (to.dx || 0); ty = y0 + (to.dy || 0); }
+    else [tx, ty] = await resolve(to);
+    for (let i = 1; i <= frames; i++) {
+      const t = easeInOut(i / frames);
+      fx = x0 + (tx - x0) * t;
+      fy = y0 + (ty - y0) * t;
+      await send('move', fx, fy);
+      await step();
+    }
+    await release(after);
+  };
+
+  const swipe = async (sel, axis, delta, frames = 34) => {
     frames = Math.round(frames * SLOW);
     const [cx, cy] = await centre(sel);
     await moveTo(axis === 'x' ? cx + 120 : cx, axis === 'y' ? cy + 120 : cy, 18, fo < 1);
@@ -283,9 +460,16 @@ export async function record(config, opts = {}) {
 
   const fadeOut = async (frames = 18) => { for (let i = 1; i <= frames; i++) { fo = 1 - easeInOut(i / frames); await step(); } };
 
-  /* ---------- the walkthrough ---------- */
+  /* ---------- the walkthrough ----------
+   * `drag` is the old scroll-a-scrollable verb, kept as an alias for configs
+   * written before 0.2.0. New work wants `swipe` for scrolling and `dragTo`
+   * for moving a thing. */
+  const verbs = {
+    tap, hover, press, release, dragTo, longPress, swipe, drag: swipe,
+    hold, moveTo, fadeOut, extent, paint, step, tick, page, config: CONFIG,
+  };
   try {
-    await CONFIG.walkthrough({ tap, drag, hold, moveTo, fadeOut, extent, paint, step, tick, page, config: CONFIG });
+    await CONFIG.walkthrough(verbs);
   } finally {
     await browser.close();
   }

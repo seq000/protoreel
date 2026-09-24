@@ -30,13 +30,15 @@ export default {
   view: { w: 390, h: 844 },            // the prototype's own viewport
   frame: { png: null },                // or a Figma device frame — see docs/device-frames.md
   pointer: 'touch',                    // 'touch' | 'cursor' | 'none'
+  clock: { start: '2026-01-01T09:41' }, // what time the page thinks it is
   output: ['webm', 'mp4', 'poster'],   // any of webm, mp4, poster, gif
 
-  async walkthrough({ tap, drag, hold, fadeOut, extent, paint }) {
+  async walkthrough({ tap, dragTo, swipe, hold, fadeOut, paint }) {
     await paint();
     await hold(45);
-    await tap('#openFilters', 50);           // move, press, click, ripple, hold 50 frames
-    await drag('#list', 'y', 220, 34);       // finger-drag a scrollable element
+    await tap('#openFilters', 50);           // move, press, release, ripple, hold 50 frames
+    await swipe('#list', 'y', 220, 34);      // scroll a scrollable element
+    await dragTo('#handle', { dx: 90 }, 40); // actually drag a thing
     await fadeOut(18);
     await hold(60);
   },
@@ -46,6 +48,15 @@ export default {
 Frames are 1/60 s: 30–50 after a tap reads comfortably, 70–90 after something that
 changes the whole screen. Every tap is logged to `out/taps.json` with its frame
 number and coordinates, so you can open the exact frame and check it.
+
+**Input is real.** Pointer actions go through Chrome's input pipeline, so the page
+gets trusted events — sliders, bezier handles, scrubbers, canvas editors and
+`:hover` all behave as they do for a human. `docs/pointer-input.md` has the verbs.
+
+**Every clock is frozen**, not just CSS: `setTimeout`, `setInterval`,
+`requestAnimationFrame`, `performance.now` and `Date` all advance 1/60 s per
+frame. A prototype that animates on rAF, counts down an ETA, or shows a clock
+records correctly instead of racing the screenshot loop.
 
 A 25–30 second clip takes two to three minutes to render — one screenshot per frame
 is the price of determinism.

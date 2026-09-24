@@ -4,6 +4,47 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] — 2026-09-24
+
+Two halves of the same problem: the recorder didn't really drive the page, it
+poked at it. Both were found by recording real prototypes.
+
+### Added
+
+- **Real pointer input.** Actions now go through Chrome's input pipeline over
+  CDP, so the page receives trusted events — pointer capture, `:hover`, drag
+  libraries and canvas handlers all work. New verbs: `dragTo`, `hover`, `press`,
+  `release`, `longPress`. A target can be a selector or `[x, y]` in prototype
+  coordinates, which is what SVG and canvas editors need. See
+  `docs/pointer-input.md`.
+- `clock: { start }` — the wall-clock instant the page believes it is, default
+  `09:41:00`. An on-screen clock or ETA is now deliberate and identical between
+  runs; `clock: false` opts out.
+
+### Fixed
+
+- **`setInterval`, `requestAnimationFrame`, `performance.now` and `Date` are now
+  frozen too.** Only CSS/WAAPI and `setTimeout` were, so anything animating on
+  rAF ran at wall-clock speed while each screenshot cost ~130 ms. A navigation
+  prototype recorded this way drove several hours of route in a 41-second clip
+  and rendered `Time left 0:00 · Distance -82562090` — which reads as a data bug
+  in the prototype and was a clock bug here.
+- The frame clock is computed as `ticks * 1000 / fps` instead of accumulating
+  `now += dt`. The accumulated version drifted to 2999.9999999999995 over 180
+  frames — enough to lose an interval fire and shift a displayed clock by a
+  second.
+- `tap()` fails when something covers the target, naming what is on top.
+  `element.click()` always reached its target even when occluded; a real pointer
+  does not, and silently clicking an overlay is worse than an error.
+
+### Changed
+
+- `drag(selector, axis, delta)` — which scrolled a scrollable element rather
+  than dragging anything — is now **`swipe`**. `drag` still works as an alias,
+  so existing configs keep running.
+- `pointer: 'touch'` emits touch events and suppresses hover; `pointer: 'cursor'`
+  emits mouse events and moves continuously, so desktop hover states appear.
+
 ## [0.1.2] — 2026-09-07
 
 ### Fixed

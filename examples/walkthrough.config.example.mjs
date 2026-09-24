@@ -46,12 +46,16 @@ export default {
        fadeOut(frames)                           fade the pointer out at the end
        extent(selector, axis)                    scrollable extent, for dragging exactly to the end
   */
-  async walkthrough({ tap, drag, hold, fadeOut, extent, paint }) {
+  async walkthrough({ tap, dragTo, swipe, hold, fadeOut, extent, paint }) {
     await paint();
     await hold(45);
     // await tap('#openFilters', 50);
     // await drag('#list', 'y', 220, 34);
     // const max = await extent('#chips', 'x'); await drag('#chips', 'x', max, 44);
+    // Move something: real pointer events, so sliders, bezier handles and
+    // canvas editors work. Target can be a selector or [x, y].
+    // await dragTo('#handle', { dx: 90 }, 40);
+
     await fadeOut(18);
     await hold(60);
   },

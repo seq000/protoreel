@@ -10,19 +10,86 @@
   #box.moved { transform: translateX(200px); }
   #go { position: absolute; left: 24px; bottom: 24px; padding: 10px 16px; border: 0; border-radius: 6px;
         background: #050533; color: #fff; font: inherit; }
+  #go:hover { background: #2b2bff; }
   #count { position: absolute; right: 24px; bottom: 30px; font-variant-numeric: tabular-nums; }
+
+  /* A handle that can only be moved with real pointer events — the whole point
+     of the drag verbs. Nothing here responds to element.click(). */
+  #track { position: absolute; left: 24px; top: 120px; width: 240px; height: 36px;
+           background: #e2e2de; border-radius: 18px; }
+  #handle { position: absolute; left: 0; top: 0; width: 36px; height: 36px; border-radius: 50%;
+            background: #050533; touch-action: none; }
+  #handle.grabbed { background: #ff4402; }
+
+  /* Every clock the page can read, written to the DOM for the test to probe.
+     Deliberately off-screen: these change every single frame, and on screen
+     they would make every frame unique — which would quietly destroy the
+     "frames are identical once settled" check that proves nothing is running
+     on a wall clock. The probe reads the values directly and more precisely
+     than pixels could. */
+  #clocks { position: absolute; left: -9999px; top: 0; }
 </style>
 </head>
 <body>
   <div id="box"></div>
   <button id="go" data-role="trigger">Move</button>
   <span id="count">0</span>
+
+  <div id="track"><div id="handle"></div></div>
+
+  <div id="clocks">
+    raf <b id="raf">0</b> · perf <b id="perf">0</b> · date <b id="date">—</b> · interval <b id="iv">0</b> · x <b id="hx">0</b>
+  </div>
+
   <script>
     let n = 0;
     document.getElementById('go').addEventListener('click', () => {
       document.getElementById('box').classList.toggle('moved');
       setTimeout(() => { document.getElementById('count').textContent = String(++n); }, 500);
     });
+
+    /* Drag: pointer capture, exactly as a real editor handle works. */
+    const handle = document.getElementById('handle');
+    const track = document.getElementById('track');
+    const hx = document.getElementById('hx');
+    let dragging = false, grabDx = 0;
+    handle.addEventListener('pointerdown', (e) => {
+      dragging = true;
+      grabDx = e.clientX - handle.getBoundingClientRect().left;
+      handle.setPointerCapture(e.pointerId);
+      handle.classList.add('grabbed');
+    });
+    handle.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const max = track.clientWidth - handle.offsetWidth;
+      const x = Math.max(0, Math.min(max, e.clientX - track.getBoundingClientRect().left - grabDx));
+      handle.style.left = x + 'px';
+      hx.textContent = String(Math.round(x));
+    });
+    handle.addEventListener('pointerup', () => { dragging = false; handle.classList.remove('grabbed'); });
+
+    /* Clocks. Each renders its own source so a frame can be checked against
+       the frame number: at frame N, raf and perf must read N x 16.667ms. */
+    let rafN = 0;
+    const tickRaf = (t) => {
+      rafN++;
+      document.getElementById('raf').textContent = String(rafN);
+      document.getElementById('perf').textContent = String(Math.round(t));
+      requestAnimationFrame(tickRaf);
+    };
+    requestAnimationFrame(tickRaf);
+
+    let ivN = 0;
+    setInterval(() => { document.getElementById('iv').textContent = String(++ivN); }, 100);
+
+    const pad = (v) => String(v).padStart(2, '0');
+    setInterval(() => {
+      const d = new Date();
+      document.getElementById('date').textContent = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    }, 50);
+    document.getElementById('date').textContent = (() => {
+      const d = new Date(); return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    })();
   </script>
 </body>
 </html>

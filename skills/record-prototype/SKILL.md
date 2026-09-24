@@ -66,12 +66,22 @@ The walkthrough is an async function that receives the step verbs:
 
 | Verb | What it does |
 |---|---|
-| `tap(selector, holdFrames)` | Moves the pointer on an eased arc, presses, clicks, blooms the ripple, holds |
-| `drag(selector, 'x'\|'y', delta, frames)` | Finger-drags a scrollable element; content tracks the pointer |
+| `tap(target, holdFrames)` | Moves the pointer on an eased arc, presses, releases, blooms the ripple, holds |
+| `dragTo(target, to, frames)` | **Moves a thing.** Press, drag, release — `to` is `[x,y]`, `{dx,dy}` or a selector |
+| `hover(target, frames)` | Moves onto it without pressing; reveals `:hover` states |
+| `press(target)` / `release(after)` | Press and hold, then lift — for anything the two above don't cover |
+| `longPress(target, frames, after)` | Press, wait, release — menus that open on a sustained press |
+| `swipe(selector, 'x'\|'y', delta, frames)` | **Scrolls** a scrollable element. Called `drag` before 0.2.0; that name still works |
 | `hold(frames)` | Rests; animations and the ripple keep running |
 | `moveTo(x, y, frames)` | Repositions the pointer without clicking |
 | `fadeOut(frames)` | Fades the pointer out at the end |
-| `extent(selector, axis)` | Scrollable extent, for dragging exactly to the end rather than guessing |
+| `extent(selector, axis)` | Scrollable extent, for swiping exactly to the end rather than guessing |
+
+A **target** is a selector or `[x, y]` in prototype coordinates — use coordinates
+for SVG and canvas, where the thing to grab often has no selector. Input is real:
+the page gets trusted events, so pointer capture, hover and drag handlers work.
+`tap` now fails if something covers the target, naming what is in the way.
+Read `docs/pointer-input.md` before recording an editor, a slider or a canvas.
 
 Frames are 1/60 s. A comfortable read is 30–50 frames after a tap, 70–90 after something that changes the whole screen. The example config's opening `paint(); hold(45)` and closing `fadeOut(18); hold(60)` are the usual bookends — keep them.
 
@@ -111,6 +121,7 @@ Then present the files with `present_files`.
 | File | Read when |
 |---|---|
 | `docs/frame-stepping.md` | Before touching timing, or when a transition looks wrong |
+| `docs/pointer-input.md` | Dragging, hovering, long-press; anything an `element.click()` can't do |
 | `docs/device-frames.md` | Compositing into a Figma phone/tablet mockup |
 | `docs/steps-from-recording.md` | Deriving the step list from a screen recording |
 | `docs/encoding.md` | Choosing codecs, sizes, posters, GIFs; the ffprobe recipe |
