@@ -30,6 +30,7 @@ export default {
   view: { w: 390, h: 844 },            // the prototype's own viewport
   frame: { png: null },                // or a Figma device frame — see docs/device-frames.md
   pointer: 'touch',                    // 'touch' | 'cursor' | 'none'
+  cursor: 'macos',                     // 'macos' | 'macos-dark' (when pointer: 'cursor')
   clock: { start: '2026-01-01T09:41' }, // what time the page thinks it is
   output: ['webm', 'mp4', 'poster'],   // any of webm, mp4, poster, gif
 

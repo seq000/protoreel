@@ -39,6 +39,32 @@ screen is not a thing. With `pointer: 'cursor'` (or `'none'`) it emits mouse
 events and the pointer moves continuously, so hover states appear as they would
 on a desktop. Pick the one that matches the device you're pretending to be.
 
+## The drawn cursor
+
+`pointer: 'cursor'` draws a macOS pointer — white fill, dark outline, soft
+shadow — and changes it with what you're doing:
+
+| State | When |
+|---|---|
+| Arrow | Moving, and at rest |
+| Open hand | `hover()` lands on something whose CSS `cursor` is `grab`, `grabbing` or `move` |
+| Closed fist | Between `press` and `release` — so a drag looks like a drag |
+
+A click is a **light pulse** rather than the touch ripple: a soft bloom over
+18 frames, which reads as a click on a desktop UI without leaving a dark halo.
+
+```js
+cursor: 'macos'        // default — white arrow, for light and mid-tone UI
+cursor: 'macos-dark'   // inverted — dark arrow with a white outline
+```
+
+The arrow's hotspot is its tip; the hands are offset so the grab point stays
+under the same coordinate. That's what stops the pointer jumping when it changes
+shape mid-drag.
+
+The press takes the same five frames whichever pointer you use — touch squashes,
+a cursor changes shape — so frame counts don't shift when you switch.
+
 ## Dragging something that isn't a selector
 
 SVG editors are the common case: the control point you want is a `<circle>`

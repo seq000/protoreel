@@ -20,6 +20,13 @@ poked at it. Both were found by recording real prototypes.
 - `clock: { start }` — the wall-clock instant the page believes it is, default
   `09:41:00`. An on-screen clock or ETA is now deliberate and identical between
   runs; `clock: false` opts out.
+- **A real drawn cursor** for `pointer: 'cursor'`, replacing the CSS triangle: a
+  macOS arrow with white fill, dark outline and a soft shadow, which becomes an
+  open hand over anything the page marks `grab`/`grabbing`/`move`, and a closed
+  fist between `press` and `release` — so a drag looks like a drag. A click is
+  now a light pulse instead of the touch ripple. `cursor: 'macos' | 'macos-dark'`
+  picks the style; the hands are offset so the grab point stays under the same
+  coordinate and the pointer doesn't jump when it changes shape.
 
 ### Fixed
 

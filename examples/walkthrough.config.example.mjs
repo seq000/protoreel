@@ -27,6 +27,7 @@ export default {
 
   // 'touch' | 'cursor' | 'none'
   pointer: 'touch',
+  cursor: 'macos',                     // 'macos' | 'macos-dark' — only when pointer is 'cursor'
 
   fps: 60,
   scale: 2,          // deviceScaleFactor; output is stage × scale

@@ -88,6 +88,13 @@ function normalise(config, configDir) {
   // The wall-clock instant the page believes it is. Fixed by default so a clock
   // or an ETA rendered on screen is deliberate and identical between runs —
   // pass clock: false to leave the page's Date alone.
+  // Which pointer gets drawn when pointer: 'cursor'. Light UI wants the white
+  // arrow; a dark prototype reads better with the inverted one.
+  c.cursor = c.cursor || 'macos';
+  const CURSOR_STYLES = ['macos', 'macos-dark'];
+  if (!CURSOR_STYLES.includes(c.cursor)) {
+    throw new Error(`config.cursor must be one of ${CURSOR_STYLES.join(', ')} — got "${c.cursor}"`);
+  }
   c.clock = c.clock === false ? false : { start: '2026-01-01T09:41:00', ...(c.clock || {}) };
   if (c.clock) {
     const t = new Date(c.clock.start).getTime();
@@ -240,10 +247,67 @@ export async function record(config, opts = {}) {
   }, [dev, !bare && CONFIG.frame.island]);
 
   if (CONFIG.pointer === 'cursor') {
+    /* A drawn macOS pointer, not a CSS triangle: white fill, dark outline and a
+     * soft shadow, so it reads on light and dark UI alike. The arrow's hotspot
+     * is its tip at (0,0); the hands are offset so the grab point sits under
+     * the same coordinate, which is what keeps the pointer from jumping when it
+     * changes shape mid-drag. */
+    const CURSORS = {
+      macos: {
+        fill: '#fff', stroke: '#1c1c1e',
+        arrow: 'M1,1 L1,20.5 L6.1,15.6 L9.2,22.4 L12.4,20.9 L9.4,14.3 L16.2,14.1 Z',
+      },
+      'macos-dark': {
+        fill: '#1c1c1e', stroke: '#fff',
+        arrow: 'M1,1 L1,20.5 L6.1,15.6 L9.2,22.4 L12.4,20.9 L9.4,14.3 L16.2,14.1 Z',
+      },
+    };
+    const C = CURSORS[CONFIG.cursor] || CURSORS.macos;
+    // Open hand and closed fist, built from rounded shapes — they survive being
+    // 18px tall far better than a single traced outline does.
+    const hand = (closed) => `
+      <svg width="26" height="28" viewBox="0 0 26 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <g fill="${C.fill}" stroke="${C.stroke}" stroke-width="1.3" stroke-linejoin="round">
+          <rect x="6.6" y="${closed ? 11.6 : 2.2}" width="4" height="${closed ? 6 : 15}" rx="2"/>
+          <rect x="10.4" y="${closed ? 10.8 : 1}" width="4" height="${closed ? 6.6 : 16}" rx="2"/>
+          <rect x="14.2" y="${closed ? 11.4 : 2.6}" width="4" height="${closed ? 6.2 : 14}" rx="2"/>
+          <rect x="17.9" y="${closed ? 12.4 : 5}" width="3.8" height="${closed ? 5.4 : 12}" rx="1.9"/>
+          <path d="M6.7 ${closed ? 12 : 9.5} C4.4 ${closed ? 11.2 : 8.6} 2.6 ${closed ? 12.6 : 10.2} 3.3 ${closed ? 14.4 : 12.2}
+                   L5.6 ${closed ? 18 : 16.4}"/>
+          <path d="M3.4 ${closed ? 13.6 : 12} v4.2 c0 4.4 3.3 8.4 8 8.4 h2.2 c4.3 0 7.5-3.1 7.5-7.6 v-3.4"/>
+        </g>
+      </svg>`;
+    const arrowSvg = `
+      <svg width="20" height="26" viewBox="0 0 20 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="${C.arrow}" fill="${C.fill}" stroke="${C.stroke}" stroke-width="1.4" stroke-linejoin="round"/>
+      </svg>`;
+
     await page.addStyleTag({ content: `
-      #pc-tf { width: 0; height: 0; margin: 0; border-radius: 0; background: none; border: none; box-shadow: none;
-        border-left: 12px solid #1c1c1c; border-bottom: 8px solid transparent; border-right: 8px solid transparent;
-        filter: drop-shadow(0 1px 2px rgba(0,0,0,.35)); transform-origin: 0 0; }` });
+      #pc-tf { width: auto; height: auto; margin: 0; border-radius: 0; background: none; border: none;
+        box-shadow: none; transform-origin: 0 0; filter: drop-shadow(0 2px 3px rgba(0,0,0,.32)); }
+      #pc-tf > svg { position: absolute; left: 0; top: 0; display: none; }
+      #pc-tf > svg.on { display: block; }
+      #pc-tf > .pc-hand { margin-left: -12px; margin-top: -13px; }
+      /* A light pulse, not the touch ring: a soft bloom that reads as a click
+         without leaving a dark halo on a desktop UI. */
+      #pc-tr { width: 34px; height: 34px; margin: -17px 0 0 -17px; border: none;
+        background: radial-gradient(circle, rgba(255,255,255,.95) 0%, rgba(255,255,255,.55) 42%, rgba(255,255,255,0) 72%);
+        mix-blend-mode: plus-lighter; }` });
+
+    await page.evaluate(([arrow, open, closed]) => {
+      const f = document.getElementById('pc-tf');
+      f.innerHTML = arrow + open + closed;
+      const [a, o, c] = f.children;
+      a.classList.add('on');
+      o.classList.add('pc-hand');
+      c.classList.add('pc-hand');
+      // 'arrow' | 'open' | 'grab' — press/release drive this.
+      window.__cursor = (kind) => {
+        a.classList.toggle('on', kind === 'arrow');
+        o.classList.toggle('on', kind === 'open');
+        c.classList.toggle('on', kind === 'grab');
+      };
+    }, [arrowSvg, hand(false), hand(true)]);
   }
   if (CONFIG.pointer === 'none') await page.addStyleTag({ content: `#pc-tf, #pc-tr { display: none !important; }` });
 
@@ -269,15 +333,19 @@ export async function record(config, opts = {}) {
   let sendMove = null;
   const taps = [];
   let fx = CONFIG.view.w / 2, fy = CONFIG.view.h + 80, fo = 0, ring = null;
-  const RING_F = 30;                                   // ripple lifetime, frames
+  // Touch leaves a ripple that lingers; a desktop click is a quick light pulse.
+  const RING_F = CONFIG.pointer === 'cursor' ? 18 : 30;
   const paint = async () => {
-    await page.evaluate(([x, y, o, r]) => {
+    await page.evaluate(([x, y, o, r, isCursor]) => {
       window.__touch(x, y, 1, o);
       if (r) {
         const p = r.t, ei = Math.min(1, p / 0.22), eo = Math.max(0, (p - 0.22) / 0.78);
-        window.__ring(r.x, r.y, 0.7 + 1.3 * (1 - Math.pow(1 - p, 3)), 0.9 * (1 - Math.pow(1 - ei, 2)) * (1 - eo * eo));
+        const grow = 1 - Math.pow(1 - p, 3);
+        const fade = (1 - Math.pow(1 - ei, 2)) * (1 - eo * eo);
+        if (isCursor) window.__ring(r.x, r.y, 0.3 + 0.85 * grow, 0.8 * fade);
+        else window.__ring(r.x, r.y, 0.7 + 1.3 * grow, 0.9 * fade);
       } else window.__ring(0, 0, 1, 0);
-    }, [fx, fy, fo, ring]);
+    }, [fx, fy, fo, ring, CONFIG.pointer === 'cursor']);
   };
   // step() drives BOTH the ripple and the frame clock — hold() must call it,
   // or the ripple freezes mid-bloom and resumes on the next pointer move.
@@ -358,11 +426,27 @@ export async function record(config, opts = {}) {
 
   sendMove = (x, y) => send('move', x, y);
 
-  /** Move the pointer over a target without pressing — reveals :hover states. */
+  /** Swap the drawn cursor: 'arrow' | 'open' | 'grab'. No-op unless drawn. */
+  const setCursor = async (kind) => {
+    if (CONFIG.pointer !== 'cursor') return;
+    await page.evaluate((k) => window.__cursor && window.__cursor(k), kind);
+  };
+
+  /** Move the pointer over a target without pressing — reveals :hover states.
+   *  If the page says the thing under the pointer is grabbable, the drawn
+   *  cursor becomes an open hand, the way a real one would. */
   const hover = async (target, frames = 24) => {
     const [x, y] = await resolve(target);
     await moveTo(x, y, frames, fo < 1);
     await send('move', fx, fy);
+    if (CONFIG.pointer === 'cursor') {
+      const grabbable = await page.evaluate(([cx, cy]) => {
+        const el = document.elementFromPoint(cx, cy);
+        // `pointer` deliberately excluded: a link or button is clicked, not grabbed.
+        return !!el && ['grab', 'grabbing', 'move'].includes(getComputedStyle(el).cursor);
+      }, toStage(fx, fy));
+      await setCursor(grabbable ? 'open' : 'arrow');
+    }
     await step();
   };
 
@@ -371,9 +455,16 @@ export async function record(config, opts = {}) {
     const [x, y] = await resolve(target);
     if (Math.abs(x - fx) > 0.5 || Math.abs(y - fy) > 0.5) await moveTo(x, y, frames, fo < 1);
     await send('move', fx, fy);
-    for (let i = 1; i <= 5; i++) {                                   // finger squash
-      await page.evaluate(([a, b, s]) => window.__touch(a, b, s, 1), [fx, fy, 1 - 0.18 * (i / 5)]);
-      await tick();
+    if (touchInput) {
+      for (let i = 1; i <= 5; i++) {                                 // finger squash
+        await page.evaluate(([a, b, s]) => window.__touch(a, b, s, 1), [fx, fy, 1 - 0.18 * (i / 5)]);
+        await tick();
+      }
+    } else {
+      // A cursor doesn't squash; it changes shape. Same five frames either way,
+      // so frame counts don't depend on the pointer style.
+      await setCursor('grab');
+      for (let i = 0; i < 5; i++) await tick();
     }
     await send('down', fx, fy);
     pressed = true;
@@ -385,6 +476,7 @@ export async function record(config, opts = {}) {
   const release = async (after = 0) => {
     await send('up', fx, fy);
     pressed = false;
+    await setCursor('arrow');
     await page.evaluate(([a, b]) => window.__touch(a, b, 1, 1), [fx, fy]);
     for (let i = 0; i < 5; i++) await step();
     if (after) await hold(after);

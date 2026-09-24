@@ -33,7 +33,7 @@ Ask with the `AskUserQuestion` tool — **and only that tool.** One question at 
 1. **Source** — a local `.html` file on disk, or a `localhost` URL. Offer any dev server already running (`curl -s -o /dev/null -w "%{http_code}" http://localhost:PORT`) as a concrete option. A remote public URL works too but warn that the page must load without auth.
 2. **Viewport** — `390 × 844` (iPhone), `1440 × 900` (desktop), `1280 × 800` (tablet/laptop), or custom. If the prototype has its own fixed device stage, read its size from the DOM and offer that as the first option.
 3. **Device frame** — a Figma node URL (export it, see `docs/device-frames.md`), a PNG already on disk, or none. Frames only make sense for phone/tablet captures.
-4. **Pointer** — touch ripple (mobile), desktop cursor, or none.
+4. **Pointer** — touch ripple (mobile), desktop cursor, or none. For a desktop cursor also offer the style: `macos` (white arrow, the default) or `macos-dark` (inverted, for a light UI). The cursor becomes a hand over grabbable things and a fist while dragging on its own; don't ask about that.
 5. **The steps** — either the user dictates them, or points at a screen recording (`.mov`/`.mp4`) of themselves clicking through. For a recording, follow `docs/steps-from-recording.md`: sample frames, read what changed, and write the step list — **reproduce only the interactions, never the hunting**, and confirm the derived list before recording.
 6. **Output** — WebM + MP4 + poster, MP4 only, or GIF. **Always ask; do not assume.** Also ask where the files should be written.
 
