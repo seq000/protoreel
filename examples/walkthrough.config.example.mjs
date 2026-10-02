@@ -37,8 +37,26 @@ export default {
   // Which files to produce. Any of 'webm', 'mp4', 'poster', 'gif'.
   output: ['webm', 'mp4', 'poster'],
 
-  /* The walkthrough. Frames are 1/60 s. 30–50 after a tap reads comfortably;
-     70–90 after something that changes the whole screen.
+  /* The walkthrough — as data or as code. Pick one.
+
+     DATA: a list of steps. Durations are frames (1/60 s) or a time like '800ms'.
+     The engine validates the list before Chrome launches and writes
+     out/steps.json with each step's frame range. See docs/steps.md.
+
+       steps: [
+         { do: 'hold', frames: 45 },
+         { do: 'tap', target: '#openFilters', after: '800ms' },
+         { do: 'swipe', target: '#list', axis: 'y', delta: 220 },
+         { do: 'dragTo', target: '#handle', to: { dx: 90 }, frames: 40 },
+         { do: 'fadeOut' },
+         { do: 'hold', frames: 60 },
+       ],
+
+     or  steps: './walkthrough.steps.json'
+
+     CODE: an async function, for when you need logic or to read the page back.
+     Frames are 1/60 s. 30–50 after a tap reads comfortably; 70–90 after
+     something that changes the whole screen.
 
        tap(selector, holdFrames)                 move on an eased arc, press, click, ripple, hold
        drag(selector, 'x' | 'y', delta, frames)  finger-drag a scrollable element

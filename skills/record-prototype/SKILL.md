@@ -62,7 +62,9 @@ Work in a gitignored directory next to the prototype (or the project's existing 
 
 Relative paths in the config (`source`, `frame.png`, `outDir`) resolve against the config file, not the shell's cwd.
 
-The walkthrough is an async function that receives the step verbs:
+**Write the walkthrough as a step list** (`steps: [...]`) unless you need logic or to read the page back — then it's an async `walkthrough()` function. A step is `{ do: 'tap', target: '#openFilters', after: '800ms' }`: one object per verb below, the verb's own defaults, durations in frames or as a time string. The list is validated before Chrome launches (a typo names the step), and the run writes `out/steps.json` with each step's frame range, which makes the pacing pass in §5 a matter of reading numbers. `docs/steps.md` has the schema; the example config shows both forms.
+
+The verbs, in either form:
 
 | Verb | What it does |
 |---|---|
@@ -97,7 +99,7 @@ From the Mac shell. A 25–30 s clip takes roughly 2–3 minutes: most of the ti
 
 ### 5. Verify before you hand it over
 
-The recorder writes `out/taps.json` — every tap with its frame number and pointer coordinates. Use it:
+The recorder writes `out/taps.json` — every tap with its frame number and pointer coordinates — and, from a step list, `out/steps.json` with each step's `from`/`to` frame. Use them:
 
 - **Read a few frames around each tap** (`.frames/00039.png` etc.) and check the pointer is on the element and the ripple is visible. Do not crop blind; use the coordinates from `taps.json`.
 - **Confirm the file plays**: `ffprobe` the output for codec, dimensions, frame rate and duration (recipe in `docs/encoding.md`). Report those numbers, not "done".
@@ -120,6 +122,7 @@ Then present the files with `present_files`.
 
 | File | Read when |
 |---|---|
+| `docs/steps.md` | The step-list schema, durations, validation and `steps.json` |
 | `docs/frame-stepping.md` | Before touching timing, or when a transition looks wrong |
 | `docs/pointer-input.md` | Dragging, hovering, long-press; anything an `element.click()` can't do |
 | `docs/device-frames.md` | Compositing into a Figma phone/tablet mockup |

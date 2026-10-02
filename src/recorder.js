@@ -14,6 +14,8 @@ import { chromium } from 'playwright-core';
 import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import { loadSteps, validateSteps, runSteps } from './steps.js';
+export { loadSteps, validateSteps, toFrames, VERBS } from './steps.js';
 
 const MAC_CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const MAC_FFMPEG = '/opt/homebrew/bin/ffmpeg';
@@ -114,7 +116,7 @@ function normalise(config, configDir) {
 
 /**
  * Record a walkthrough.
- * @param {object} config  see examples/walkthrough.config.example.mjs
+ * @param {object} config  see examples/walkthrough.config.example.mjs — walkthrough() or steps
  * @param {object} [opts]
  * @param {string} [opts.name]       output basename (default 'walkthrough')
  * @param {string} [opts.configDir]  directory relative paths resolve against (default cwd)
@@ -125,8 +127,15 @@ export async function record(config, opts = {}) {
   const CONFIG = normalise(config, configDir);
   const name = opts.name || CONFIG.name || 'walkthrough';
   const log = opts.quiet ? () => {} : (...a) => console.log(...a);
-  if (typeof CONFIG.walkthrough !== 'function') {
-    throw new Error('config.walkthrough must be an async function — it receives { tap, hover, press, release, dragTo, longPress, swipe, hold, moveTo, fadeOut, extent, paint, step, page }');
+  /* The walkthrough is either data (config.steps — see docs/steps.md) or code
+   * (config.walkthrough). Steps are validated here, before Chrome launches. */
+  const hasFn = typeof CONFIG.walkthrough === 'function';
+  if (CONFIG.steps != null && hasFn) {
+    throw new Error('config has both steps and walkthrough — a walkthrough is one or the other');
+  }
+  const STEPS = CONFIG.steps != null ? validateSteps(loadSteps(CONFIG.steps, configDir), CONFIG.fps || 60) : null;
+  if (!STEPS && !hasFn) {
+    throw new Error('config needs a walkthrough: either steps (an array or a .json path — see docs/steps.md) or an async walkthrough({ tap, hover, press, release, dragTo, longPress, swipe, hold, moveTo, fadeOut, extent, paint, step, page }) function');
   }
 
   const { ffmpeg: FF } = preflight(CONFIG);
@@ -559,15 +568,21 @@ export async function record(config, opts = {}) {
   const verbs = {
     tap, hover, press, release, dragTo, longPress, swipe, drag: swipe,
     hold, moveTo, fadeOut, extent, paint, step, tick, page, config: CONFIG,
+    frame: () => n,                       // frames captured so far — the frame clock
   };
+  let stepLog = [];
   try {
-    await CONFIG.walkthrough(verbs);
+    if (STEPS) stepLog = await runSteps(STEPS, verbs);
+    else await CONFIG.walkthrough(verbs);
   } finally {
     await browser.close();
   }
 
   fs.writeFileSync(path.join(outDir, 'taps.json'), JSON.stringify(taps, null, 1));
-  log('frames', n, `(${(n / FPS).toFixed(1)}s)`, '· taps', taps.length);
+  // Where each step sat on the frame clock. Only the data form knows its steps;
+  // a function is opaque, so there the file is simply absent.
+  if (STEPS) fs.writeFileSync(path.join(outDir, 'steps.json'), JSON.stringify(stepLog, null, 1));
+  log('frames', n, `(${(n / FPS).toFixed(1)}s)`, '· taps', taps.length, STEPS ? `· steps ${stepLog.length}` : '');
 
   /* ---------- encode ---------- */
   const seq = path.join(frameDir, '%05d.png');
@@ -605,7 +620,7 @@ export async function record(config, opts = {}) {
   }
 
   for (const f of Object.values(files)) log(path.basename(f), (fs.statSync(f).size / 1024).toFixed(0) + ' KB');
-  return { frames: n, seconds: n / FPS, taps, files, frameDir, outDir };
+  return { frames: n, seconds: n / FPS, taps, steps: stepLog, files, frameDir, outDir };
 }
 
 /**

@@ -20,8 +20,10 @@ Usage:
   protoreel inspect <config.mjs>     print the page's interactive elements (real selectors) as JSON
   protoreel --help | --version
 
-The config is an ES module: settings plus an async walkthrough({ tap, drag, hold, ... }) function.
-Start from examples/walkthrough.config.example.mjs. Relative paths resolve against the config file.
+The config is an ES module: settings plus the walkthrough — a list of steps
+(steps: [{ do: 'tap', target: '#go' }, ...] or a .json path) or an async
+walkthrough({ tap, swipe, hold, ... }) function. Start from
+examples/walkthrough.config.example.mjs. Relative paths resolve against the config file.
 Needs Google Chrome and ffmpeg. Docs: https://github.com/seq000/protoreel`;
 
 async function loadConfig(p) {

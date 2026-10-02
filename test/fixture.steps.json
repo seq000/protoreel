@@ -1,0 +1,9 @@
+{
+  "steps": [
+    { "do": "hold", "frames": 10 },
+    { "id": "go", "do": "tap", "target": "#go", "after": 40 },
+    { "id": "handle", "do": "dragTo", "target": "#handle", "to": { "dx": 150 }, "frames": 34, "after": "167ms" },
+    { "do": "fadeOut", "frames": 6 },
+    { "do": "hold", "frames": 10, "note": "settle" }
+  ]
+}

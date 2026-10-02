@@ -21,8 +21,8 @@ npx protoreel inspect walkthrough.config.mjs   # lists the page's buttons/links/
 npx protoreel walkthrough.config.mjs           # records → out/walkthrough.{webm,mp4} + poster
 ```
 
-The config is a small ES module: the settings, plus an async `walkthrough()` that
-receives the step verbs.
+The config is a small ES module: the settings, plus the walkthrough — a list of
+steps, or an async `walkthrough()` that receives the step verbs.
 
 ```js
 export default {
@@ -34,21 +34,38 @@ export default {
   clock: { start: '2026-01-01T09:41' }, // what time the page thinks it is
   output: ['webm', 'mp4', 'poster'],   // any of webm, mp4, poster, gif
 
-  async walkthrough({ tap, dragTo, swipe, hold, fadeOut, paint }) {
-    await paint();
-    await hold(45);
-    await tap('#openFilters', 50);           // move, press, release, ripple, hold 50 frames
-    await swipe('#list', 'y', 220, 34);      // scroll a scrollable element
-    await dragTo('#handle', { dx: 90 }, 40); // actually drag a thing
-    await fadeOut(18);
-    await hold(60);
-  },
+  steps: [
+    { do: 'hold', frames: 45 },
+    { do: 'tap', target: '#openFilters', after: '800ms' },  // move, press, release, ripple, hold
+    { do: 'swipe', target: '#list', axis: 'y', delta: 220 }, // scroll a scrollable element
+    { do: 'dragTo', target: '#handle', to: { dx: 90 } },     // actually drag a thing
+    { do: 'fadeOut' },
+    { do: 'hold', frames: 60 },
+  ],
 };
 ```
 
-Frames are 1/60 s: 30–50 after a tap reads comfortably, 70–90 after something that
-changes the whole screen. Every tap is logged to `out/taps.json` with its frame
-number and coordinates, so you can open the exact frame and check it.
+Durations are frames (1/60 s) or a time like `'800ms'`: 30–50 frames after a tap
+reads comfortably, 70–90 after something that changes the whole screen. The list is
+validated before Chrome launches, and `steps` can be a path to a `.json` file —
+[docs/steps.md](docs/steps.md) has the schema. The same walkthrough as code, for
+when you need logic or want to read the page back:
+
+```js
+  async walkthrough({ tap, dragTo, swipe, hold, fadeOut, paint }) {
+    await paint();
+    await hold(45);
+    await tap('#openFilters', 50);
+    await swipe('#list', 'y', 220, 34);
+    await dragTo('#handle', { dx: 90 }, 40);
+    await fadeOut(18);
+    await hold(60);
+  },
+```
+
+Every tap is logged to `out/taps.json` with its frame number and coordinates, and a
+step list also writes `out/steps.json` with each step's frame range — so you can
+open the exact frame and check it.
 
 **Input is real.** Pointer actions go through Chrome's input pipeline, so the page
 gets trusted events — sliders, bezier handles, scrubbers, canvas editors and
@@ -100,6 +117,7 @@ details and the failure modes.
 
 ## Docs
 
+- [steps.md](docs/steps.md) — the walkthrough as data: step schema, durations, validation, `steps.json`
 - [frame-stepping.md](docs/frame-stepping.md) — the two clocks, why both must be frozen, how to verify it
 - [device-frames.md](docs/device-frames.md) — exporting a frame from Figma and measuring the screen slot
 - [steps-from-recording.md](docs/steps-from-recording.md) — turning a screen recording into a step list
@@ -109,6 +127,7 @@ details and the failure modes.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). `npm test` records a fixture page twice and
 asserts the frame count, the tap log, the ffprobe spec of the output, that the clocks
-actually tick, and that the two runs are byte-identical.
+actually tick, that the two runs are byte-identical, and that the same walkthrough
+written as a step list renders byte-identical to the function.
 
 MIT — see [LICENSE](LICENSE).

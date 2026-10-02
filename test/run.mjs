@@ -79,5 +79,29 @@ const h2 = hashFrames(r2.frameDir);
 const same = h1.length === h2.length && h1.every(([f, h], i) => h2[i][0] === f && h2[i][1] === h);
 check(same, `re-run is byte-identical across all ${h1.length} frames`);
 
+/* Steps as data. fixture.steps.json is the same walkthrough written as JSON —
+ * if the two forms drive the same verbs, every frame must match run 1. */
+console.log('run 3 — steps as data');
+const { walkthrough: _fn, ...settings } = config;
+const r3 = await record({ ...settings, steps: './fixture.steps.json' }, { configDir: here, name: 'fixture-steps', quiet: true });
+const h3 = hashFrames(r3.frameDir);
+const sameAsFn = h1.length === h3.length && h1.every(([f, h], i) => h3[i][0] === f && h3[i][1] === h);
+check(sameAsFn, `JSON step list renders byte-identical to the function form (${h3.length} frames)`);
+const stepLog = JSON.parse(fs.readFileSync(path.join(r3.outDir, 'steps.json'), 'utf8'));
+check(stepLog.length === 5 && stepLog[1].id === 'go' && stepLog[1].do === 'tap', 'steps.json lists every step with its id and verb');
+check(stepLog[1].from === 10 && stepLog[1].to === 85, `tap step spans frames ${stepLog[1]?.from}–${stepLog[1]?.to} (expected 10–85)`);
+check(stepLog[2].from === 85 && stepLog[2].to === 164, `dragTo step spans frames ${stepLog[2]?.from}–${stepLog[2]?.to} (expected 85–164; after '167ms' = 10 frames)`);
+check(stepLog[4].to === r3.frames && stepLog[4].note === 'settle', 'last step ends on the final frame; note carried through');
+check(JSON.stringify(r3.steps) === JSON.stringify(stepLog), 'record() returns the same step log it wrote');
+
+// Bad lists fail before Chrome launches, naming the step.
+const rejects = async (steps, re) => { try { await record({ ...settings, steps }, { configDir: here, quiet: true }); return false; } catch (e) { return re.test(e.message); } };
+check(await rejects([{ do: 'tapp', target: '#go' }], /steps\[0\]: unknown verb "tapp"/), 'unknown verb is rejected with the step index');
+check(await rejects([{ do: 'tap', targett: '#go' }], /steps\[0\] \(tap\): unknown field "targett"/), 'misspelt field is rejected');
+check(await rejects([{ do: 'hold', frames: '1 minute' }], /a duration is a number of frames or a time/), 'bad duration string is rejected');
+check(await rejects([{ do: 'tap', target: '#go' }, { do: 'swipe', target: '#l', axis: 'z', delta: 10 }], /steps\[1\] \(swipe\): axis/), 'swipe axis is checked');
+try { await record({ ...config, steps: [] }, { configDir: here, quiet: true }); check(false, 'both forms rejected'); }
+catch (e) { check(/both steps and walkthrough/.test(e.message), 'config with both steps and walkthrough is rejected'); }
+
 console.log(failures ? `\n${failures} check(s) failed` : '\nall checks passed');
 process.exit(failures ? 1 : 0);

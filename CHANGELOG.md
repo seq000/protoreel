@@ -4,6 +4,23 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] — 2026-10-02
+
+### Added
+
+- **The walkthrough as data.** `config.steps` — an array of step objects, or a
+  path to a `.json` file — replaces `walkthrough()` for plain click-throughs:
+  `{ do: 'tap', target: '#go', after: '800ms' }`. Every verb has a step form
+  with the verb's own defaults; durations are frames or a time string
+  (`'500ms'`, `'1.5s'`); `swipe` takes `delta: 'end'`. The list is validated
+  before Chrome launches and a mistake names the step. A run from a step list
+  writes `out/steps.json` with each step's frame range, and `record()` returns
+  it as `result.steps`. The function form is unchanged and the two render
+  byte-identical frames — `npm test` checks that. See `docs/steps.md`.
+- `frame()` in the verb set: the number of frames captured so far.
+- `validateSteps`, `loadSteps`, `toFrames` and `VERBS` are exported from the
+  package for tools that read or write step lists.
+
 ## [0.2.0] — 2026-09-24
 
 Two halves of the same problem: the recorder didn't really drive the page, it
